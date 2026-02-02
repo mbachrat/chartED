@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import PersonCard from './PersonCard'
 
 function buildTree(people) {
@@ -19,8 +19,6 @@ function buildTree(people) {
 }
 
 export default function OrgChart({ people = [], filter = null }) {
-  const [selected, setSelected] = useState(null)
-
   const filtered = useMemo(() => {
     if (!filter) return people
     return people.filter(p => p.location === filter)
@@ -28,33 +26,42 @@ export default function OrgChart({ people = [], filter = null }) {
 
   const roots = useMemo(() => buildTree(filtered), [filtered])
 
+  if (!roots || roots.length === 0) return <div className="text-muted">No people found</div>
+
   return (
-    <div className="space-y-4">
-      {roots.length === 0 && <div className="text-muted">No people found</div>}
-      <div className="flex flex-wrap gap-4">
-        {roots.map(r => (
-          <div key={r.id} className="w-full md:w-1/3">
-            <Node node={r} onSelect={setSelected} />
-          </div>
-        ))}
-      </div>
-      {selected}
+    <div className="space-y-8">
+      {/* Render each top-level root as a vertical tree */}
+      {roots.map(root => (
+        <div key={root.id} className="w-full">
+          <Tree node={root} />
+        </div>
+      ))}
     </div>
   )
 }
 
-function Node({ node, onSelect }) {
+function Tree({ node }) {
+  // Node card centered
   return (
-    <div>
-      <PersonCard person={node} onClick={() => onSelect(node)} />
+    <div className="flex flex-col items-center">
+      <div className="inline-block">
+        <PersonCard person={node} />
+      </div>
+
       {node.reports && node.reports.length > 0 && (
-        <div className="pl-6 mt-2 border-l">
-          {node.reports.map(r => (
-            <div key={r.id} className="mt-2">
-              <Node node={r} onSelect={onSelect} />
-            </div>
-          ))}
-        </div>
+        <>
+          {/* vertical connector */}
+          <div className="w-px h-6 bg-gray-200 mt-4" />
+
+          {/* children row - will push surrounding content outward naturally */}
+          <div className="children flex justify-center gap-8 mt-6 w-full">
+            {node.reports.map(child => (
+              <div key={child.id} className="flex flex-col items-center">
+                <Tree node={child} />
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
