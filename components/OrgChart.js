@@ -3,28 +3,63 @@ import { useMemo } from 'react'
 import PersonCard from './PersonCard'
 
 function buildTree(people) {
-  const map = new Map()
-  people.forEach(p => map.set(p.id, { ...p, reports: [] }))
+  // Deprecated: kept for reference. New build logic below.
+  return []
+}
+
+// Build tree with filter-aware reparenting:
+// - `people` is the full list (unfiltered)
+// - `filter` is a location filter (string or null)
+// Visible nodes are those matching the filter. For a visible node whose direct
+// manager is not visible, traverse upward until a visible ancestor is found and
+// temporarily assign that ancestor as its parent for rendering. If none found,
+// the node becomes a root.
+function buildTreeWithFiltering(people, filter) {
+  const allMap = new Map()
+  people.forEach(p => allMap.set(p.id, { ...p }))
+
+  // Determine which people are visible under the filter
+  const visibleMap = new Map()
+  people.forEach(p => {
+    const visible = !filter || p.location === filter
+    if (visible) visibleMap.set(p.id, { ...p })
+  })
+
+  // Helper: find nearest visible ancestor id (or null)
+  function findVisibleAncestorId(person) {
+    let mid = person.managerId
+    const visited = new Set()
+    while (mid) {
+      if (visited.has(mid)) break
+      visited.add(mid)
+      const mgr = allMap.get(mid)
+      if (!mgr) return null
+      if (visibleMap.has(mid)) return mid
+      mid = mgr.managerId
+    }
+    return null
+  }
+
+  // Create nodes only for visible people
+  const nodes = new Map()
+  visibleMap.forEach((p, id) => nodes.set(id, { ...p, reports: [] }))
+
   const roots = []
-  map.forEach((node) => {
-    if (node.managerId) {
-      const parent = map.get(node.managerId)
-      if (parent) parent.reports.push(node)
-      else roots.push(node)
+  // For each visible node, find effective parent (nearest visible ancestor)
+  nodes.forEach((node) => {
+    const ancestorId = findVisibleAncestorId(node)
+    if (ancestorId && nodes.has(ancestorId)) {
+      nodes.get(ancestorId).reports.push(node)
     } else {
       roots.push(node)
     }
   })
+
   return roots
 }
 
 export default function OrgChart({ people = [], filter = null }) {
-  const filtered = useMemo(() => {
-    if (!filter) return people
-    return people.filter(p => p.location === filter)
-  }, [people, filter])
-
-  const roots = useMemo(() => buildTree(filtered), [filtered])
+  const roots = useMemo(() => buildTreeWithFiltering(people, filter), [people, filter])
 
   if (!roots || roots.length === 0) return <div className="text-muted">No people found</div>
 
